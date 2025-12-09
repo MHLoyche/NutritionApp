@@ -2,13 +2,19 @@ package com.example.nutritionapptwo.viewmodel
 
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.nutritionapptwo.model.MealDetails
 import com.example.nutritionapptwo.model.ScannedItem
+import com.example.nutritionapptwo.repository.OpenFoodFactsRepository
+import kotlinx.coroutines.launch
 
-class MealViewModel : ViewModel() {
+class MealViewModel(
+    private val repository: OpenFoodFactsRepository = OpenFoodFactsRepository()
+) : ViewModel() {
 
     // mealName -> list of scanned items
     private val _mealItems = mutableStateMapOf<String, MutableList<ScannedItem>>()
+
     val mealItems: Map<String, List<ScannedItem>> get() = _mealItems
 
     fun getItemsForMeal(mealName: String): List<ScannedItem> =
@@ -62,4 +68,18 @@ class MealViewModel : ViewModel() {
             fat = fat
         )
     }
+
+    fun addItemFromBarcode(mealName: String, barcode: String) {
+        viewModelScope.launch {
+            val item = repository.getItemForBarcode(barcode)
+            if (item != null) {
+                addItemToMeal(mealName, item)
+            } else {
+                // Fallback if API fails: at least keep the barcode
+                addItemToMeal(mealName, ScannedItem(barcode = barcode))
+            }
+        }
+    }
+
+
 }

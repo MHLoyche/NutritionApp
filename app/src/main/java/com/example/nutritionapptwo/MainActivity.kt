@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -315,10 +316,7 @@ fun MealDetailScreen(
             if (result.resultCode == Activity.RESULT_OK) {
                 val barcode = result.data?.getStringExtra("barcode")
                 if (!barcode.isNullOrEmpty()) {
-                    viewModel.addItemToMeal(
-                        mealName,
-                        ScannedItem(barcode = barcode)
-                    )
+                    viewModel.addItemFromBarcode(mealName, barcode)
                 }
             }
         }
@@ -331,6 +329,30 @@ fun MealDetailScreen(
                 ScannedItem(
                     barcode = "1234567890123",
                     name = "Sample Item",
+                    calories = 250,
+                    protein = 10,
+                    fat = 5,
+                    carbohydrates = 30
+                )
+            )
+            viewModel.addItemToMeal(
+                mealName,
+                ScannedItem(
+                    barcode = "9876543210987",
+                    name = "Another Item",
+                    calories = 150,
+                    protein = 5,
+                    fat = 2,
+                    carbohydrates = 20
+                )
+            )
+        }
+        if (mealName == "Dinner" && scannedItems.isEmpty()) {
+            viewModel.addItemToMeal(
+                mealName,
+                ScannedItem(
+                    barcode = "123632890123",
+                    name = "Sample Item 3",
                     calories = 250,
                     protein = 10,
                     fat = 5,
@@ -361,10 +383,10 @@ fun MealDetailScreen(
             NutrientBanner(
                 kcal = nutrients.kcal,
                 kcalGoal = 2000,
-                protein = nutrients.protein,
-                proteinGoal = 140,
                 carbs = nutrients.carbs,
                 carbsGoal = 100,
+                protein = nutrients.protein,
+                proteinGoal = 140,
                 fat = nutrients.fat,
                 fatGoal = 80,
                 modifier = Modifier.padding(16.dp)
@@ -372,9 +394,16 @@ fun MealDetailScreen(
 
             Button(
                 onClick = {
-                    val intent = Intent(context, BarcodeScannerActivity::class.java)
-                    launcher?.launch(intent)
+                    if (!isInPreview && launcher != null) {
+                        try {
+                            val intent = Intent(context, BarcodeScannerActivity::class.java)
+                            launcher.launch(intent)
+                        } catch (_: Exception) {
+                            Toast.makeText(context, "Scanner not available", Toast.LENGTH_SHORT).show()
+                        }
+                    }
                 },
+                enabled = !isInPreview,
                 modifier = Modifier
                     .align(Alignment.End)
                     .padding(16.dp)
@@ -397,6 +426,7 @@ fun MealDetailScreen(
                 }
 
                 items(scannedItems) { item ->
+                    val displayName = if (item.name.isNotBlank()) item.name else item.barcode
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -406,39 +436,10 @@ fun MealDetailScreen(
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                text = item.name.takeIf { it.isNotBlank() } ?: item.barcode,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
+                                text = "$displayName - ${item.calories} kcal, ${item.protein} g protein, ${item.fat} g fat, ${item.carbohydrates} g carbs",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
                             )
-                            androidx.compose.foundation.layout.Spacer(
-                                modifier = Modifier.height(6.dp)
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Calories: ${item.calories} kcal",
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Text(
-                                    text = "Protein: ${item.protein} g",
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Fat: ${item.fat} g",
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Text(
-                                    text = "Carbs: ${item.carbohydrates} g",
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
                         }
                     }
                 }
