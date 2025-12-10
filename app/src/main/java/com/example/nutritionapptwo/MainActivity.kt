@@ -29,6 +29,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -86,15 +89,16 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainScreen(
-    onMealClick: (String) -> Unit, // Callback when a meal box is clicked
-    viewModel: MealViewModel // ViewModel to hold data
+    onMealClick: (String) -> Unit,
+    viewModel: MealViewModel
 ) {
-    val total = viewModel.getTotalNutrients() // get total nutrients for the day
+    val selectedDate by viewModel.selectedDate.collectAsState()
+    // Collect totals directly from ViewModel's StateFlow so UI updates when items are added
+    val total by viewModel.totalForSelectedDate.collectAsState()
 
     Box(modifier = Modifier.fillMaxSize()) {
         WavyBackground()
 
-        // Scaffold to provide basic material design layout structure
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             containerColor = Color.Transparent
@@ -115,6 +119,11 @@ fun MainScreen(
                     carbsGoal = 100,
                     fat = total.fat,
                     fatGoal = 80
+                )
+
+                DateSelection(
+                    selectedDate = selectedDate,
+                    onDateSelected = { date -> viewModel.setSelectedDate(date) }
                 )
 
                 MealBox(mealName = "Breakfast", onClick = { onMealClick("Breakfast") })
@@ -138,6 +147,116 @@ fun TitleCard(title: String, modifier: Modifier = Modifier) {
             .padding(horizontal = 12.dp, vertical = 14.dp)
     )
 }
+
+@Composable
+fun DateSelection(
+    selectedDate: String,
+    onDateSelected: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val calendar = remember { java.util.Calendar.getInstance() }
+    val dateFormat = remember {
+        java.text.SimpleDateFormat("dd-MM-yyyy", java.util.Locale.getDefault())
+    }
+
+    fun shiftDate(days: Int) {
+        val current = try {
+            dateFormat.parse(selectedDate)
+        } catch (_: Exception) {
+            java.util.Date()
+        }
+        val cal = java.util.Calendar.getInstance().apply { time = current }
+        cal.add(java.util.Calendar.DAY_OF_YEAR, days)
+        onDateSelected(dateFormat.format(cal.time))
+    }
+
+    fun openDatePicker() {
+        // Initialize calendar to currently selected date
+        try {
+            val parsed = dateFormat.parse(selectedDate)
+            if (parsed != null) {
+                calendar.time = parsed
+            }
+        } catch (_: Exception) {
+        }
+
+        android.app.DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                calendar.set(year, month, dayOfMonth)
+                onDateSelected(dateFormat.format(calendar.time))
+            },
+            calendar.get(java.util.Calendar.YEAR),
+            calendar.get(java.util.Calendar.MONTH),
+            calendar.get(java.util.Calendar.DAY_OF_MONTH)
+        ).show()
+    }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFEEFDD4)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Left-aligned back arrow
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp)
+                    .clickable { shiftDate(-1) }
+                    .height(40.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Text(
+                    text = "<",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            // Centered date box
+            Box(
+                modifier = Modifier
+                    .weight(2f)
+                    .clickable { openDatePicker() }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = selectedDate,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            }
+
+            // Right-aligned forward arrow
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 8.dp)
+                    .clickable { shiftDate(1) }
+                    .height(40.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Text(
+                    text = ">",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
 
 @Composable
 fun NutrientBanner(
@@ -306,8 +425,12 @@ fun MealDetailScreen(
     val context = LocalContext.current
     val isInPreview = androidx.compose.ui.platform.LocalInspectionMode.current
 
-    val scannedItems = viewModel.getItemsForMeal(mealName)
-    val nutrients = viewModel.getNutrientsForMeal(mealName)
+    // Observe the items and nutrients via StateFlows so the UI updates immediately on changes
+    val itemsByMeal by viewModel.itemsByMeal.collectAsState()
+    val mealNutrientsMap by viewModel.mealNutrientsByMeal.collectAsState()
+
+    val scannedItems = itemsByMeal[mealName] ?: emptyList()
+    val nutrients = mealNutrientsMap[mealName] ?: com.example.nutritionapptwo.model.MealDetails(0,0,0,0)
 
     val launcher = if (!isInPreview) {
         rememberLauncherForActivityResult(
@@ -322,7 +445,9 @@ fun MealDetailScreen(
         }
     } else null
 
-    LaunchedEffect(mealName) {
+    val selectedDate by viewModel.selectedDate.collectAsState()
+    LaunchedEffect(mealName, selectedDate) {
+        val scannedItems = viewModel.getItemsForMeal(mealName)
         if (mealName == "Lunch" && scannedItems.isEmpty()) {
             viewModel.addItemToMeal(
                 mealName,
@@ -426,7 +551,7 @@ fun MealDetailScreen(
                 }
 
                 items(scannedItems) { item ->
-                    val displayName = if (item.name.isNotBlank()) item.name else item.barcode
+                    val displayName = item.name.ifBlank { item.barcode }
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -461,6 +586,7 @@ fun MainScreenPreview() {
     NutritionAppTwoTheme {
         // Preview with an empty MealViewModel
         val previewViewModel = MealViewModel()
-        MealDetailScreen(mealName = "Lunch", onBack = { }, viewModel = previewViewModel)
+        MainScreen(onMealClick = { }, viewModel = previewViewModel)
+        //MealDetailScreen(mealName = "Lunch", onBack = { }, viewModel = previewViewModel)
     }
 }
