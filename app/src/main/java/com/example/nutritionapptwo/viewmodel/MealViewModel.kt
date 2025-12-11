@@ -56,6 +56,26 @@ class MealViewModel : ViewModel() {
         refreshDerivedState()
     }
 
+    fun removeItemFromMeal(mealName: String, item: ScannedItem) {
+        val date = _selectedDate.value
+        val mealsForDate = _mealsByDate[date] ?: return
+        val itemsForMeal = mealsForDate[mealName] ?: return
+        itemsForMeal.remove(item)
+        refreshDerivedState()
+    }
+
+    fun updateItemServingSize(mealName: String, item: ScannedItem, newGrams: Int) {
+        val date = _selectedDate.value
+        val mealsForDate = _mealsByDate[date] ?: return
+        val itemsForMeal = mealsForDate[mealName] ?: return
+        val index = itemsForMeal.indexOf(item)
+        if (index >= 0) {
+            // Replace the item with adjusted nutrients
+            itemsForMeal[index] = item.withServingSize(newGrams)
+            refreshDerivedState()
+        }
+    }
+
     /** Returns a snapshot of nutrients for the given meal. Prefer collecting [mealNutrientsByMeal] for updates. */
     fun getNutrientsForMeal(mealName: String): MealDetails {
         return _mealNutrientsByMeal.value[mealName] ?: MealDetails(0, 0, 0, 0)

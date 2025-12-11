@@ -1,19 +1,30 @@
 package com.example.nutritionapptwo.network
 
+import com.google.gson.annotations.SerializedName
+
 data class OpenFoodFactsResponse(
-    val status: Int? = null,
+    @SerializedName("status")
+    val status: Int = 0,
+    @SerializedName("product")
     val product: ProductDto? = null
 )
 
 data class ProductDto(
+    @SerializedName("code")
     val code: String? = null,
+    @SerializedName("product_name")
     val product_name: String? = null,
+    @SerializedName("nutriments")
     val nutriments: NutrimentsDto? = null
 )
 
 data class NutrimentsDto(
-    val energy_kcal_100g: Int? = null,
-    val protein_100g: Int? = null,
-    val fat_100g: Int? = null,
-    val carbohydrates_100g: Int? = null
+    @SerializedName("energy-kcal_100g")
+    val energy_kcal_100g: Double? = null,
+    @SerializedName("proteins_100g")
+    val proteins_100g: Double? = null,
+    @SerializedName("fat_100g")
+    val fat_100g: Double? = null,
+    @SerializedName("carbohydrates_100g")
+    val carbohydrates_100g: Double? = null
 )

@@ -1,14 +1,16 @@
 package com.example.nutritionapptwo
 
-import android.annotation.SuppressLint
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -20,18 +22,24 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -39,15 +47,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.nutritionapptwo.model.ScannedItem
 import com.example.nutritionapptwo.ui.theme.NutritionAppTwoTheme
+import com.example.nutritionapptwo.ui.theme.TextBlack
 import com.example.nutritionapptwo.viewmodel.MealViewModel
 
 class MainActivity : ComponentActivity() {
@@ -60,6 +70,24 @@ class MainActivity : ComponentActivity() {
                 val mealViewModel: MealViewModel = viewModel() // Viewmodel to hold meals + nutrients
 
                 // Navigation host to manage different screens and deciding start screen
+                // Create a single activity-level launcher for the scanner and a permission launcher
+                val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result: ActivityResult ->
+                    if (result.resultCode == Activity.RESULT_OK) {
+                        val barcode = result.data?.getStringExtra("barcode")
+                        val mealName = result.data?.getStringExtra("mealName")
+                        if (!barcode.isNullOrEmpty() && mealName != null) {
+                            mealViewModel.addItemFromBarcode(mealName, barcode)
+                        }
+                    }
+                }
+
+                val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted: Boolean ->
+                    // if granted, caller should launch scanner via scannerLauncher manually
+                    if (!granted) {
+                        // optional: show toast or record denial
+                    }
+                }
+
                 NavHost(
                     navController = navController,
                     startDestination = "main",
@@ -77,7 +105,14 @@ class MainActivity : ComponentActivity() {
                         MealDetailScreen(
                             mealName = mealName,
                             onBack = { navController.popBackStack() },
-                            viewModel = mealViewModel
+                            viewModel = mealViewModel,
+                            // pass the launchers down so the composable can request permission and start scanner
+                            onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
+                            onStartScanner = { intent ->
+                                // attach the mealName to the scanner activity intent so the activity returns it back
+                                intent.putExtra("mealName", mealName)
+                                scannerLauncher.launch(intent)
+                            }
                         )
                     }
                 }
@@ -143,6 +178,7 @@ fun TitleCard(title: String, modifier: Modifier = Modifier) {
         style = MaterialTheme.typography.headlineLarge,
         fontWeight = FontWeight.Bold,
         fontSize = 26.sp,
+        color = TextBlack,
         modifier = modifier
             .padding(horizontal = 12.dp, vertical = 14.dp)
     )
@@ -218,7 +254,8 @@ fun DateSelection(
                 Text(
                     text = "<",
                     style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = TextBlack
                 )
             }
 
@@ -234,7 +271,8 @@ fun DateSelection(
                     text = selectedDate,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
+                    fontSize = 18.sp,
+                    color = TextBlack
                 )
             }
 
@@ -250,7 +288,8 @@ fun DateSelection(
                 Text(
                     text = ">",
                     style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = TextBlack
                 )
             }
         }
@@ -282,7 +321,8 @@ fun NutrientBanner(
             Text(
                 text = "Today’s Macros",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = TextBlack
             )
             NutrientProgressRow(
                 label = "Calories",
@@ -331,7 +371,8 @@ fun NutrientProgressRow(
         Text(
             text = "$label: $value / $goal",
             style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            color = TextBlack
         )
         LinearProgressIndicator(
             progress = { progress },
@@ -410,7 +451,8 @@ fun MealBox(
         ) {
             Text(
                 text = mealName,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = TextBlack
             )
         }
     }
@@ -420,7 +462,9 @@ fun MealBox(
 fun MealDetailScreen(
     mealName: String,
     onBack: () -> Unit,
-    viewModel: MealViewModel
+    viewModel: MealViewModel,
+    onRequestPermission: () -> Unit,
+    onStartScanner: (Intent) -> Unit
 ) {
     val context = LocalContext.current
     val isInPreview = androidx.compose.ui.platform.LocalInspectionMode.current
@@ -429,21 +473,7 @@ fun MealDetailScreen(
     val itemsByMeal by viewModel.itemsByMeal.collectAsState()
     val mealNutrientsMap by viewModel.mealNutrientsByMeal.collectAsState()
 
-    val scannedItems = itemsByMeal[mealName] ?: emptyList()
     val nutrients = mealNutrientsMap[mealName] ?: com.example.nutritionapptwo.model.MealDetails(0,0,0,0)
-
-    val launcher = if (!isInPreview) {
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.StartActivityForResult()
-        ) { result ->
-            if (result.resultCode == Activity.RESULT_OK) {
-                val barcode = result.data?.getStringExtra("barcode")
-                if (!barcode.isNullOrEmpty()) {
-                    viewModel.addItemFromBarcode(mealName, barcode)
-                }
-            }
-        }
-    } else null
 
     val selectedDate by viewModel.selectedDate.collectAsState()
     LaunchedEffect(mealName, selectedDate) {
@@ -487,6 +517,7 @@ fun MealDetailScreen(
         }
     }
 
+
     Scaffold { padding ->
         WavyBackground()
         Column(
@@ -500,8 +531,13 @@ fun MealDetailScreen(
             ) {
                 TitleCard("$mealName Items", modifier = Modifier.weight(1f))
 
-                Button(onClick = onBack, modifier = Modifier.padding(horizontal = 16.dp)) {
-                    Text(text = "Back")
+                Button(
+                    onClick = onBack,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE9F7D9)),
+                    border = ButtonDefaults.outlinedButtonBorder()
+                    ) {
+                    Text(text = "Back", color = TextBlack)
                 }
             }
 
@@ -519,74 +555,235 @@ fun MealDetailScreen(
 
             Button(
                 onClick = {
-                    if (!isInPreview && launcher != null) {
-                        try {
-                            val intent = Intent(context, BarcodeScannerActivity::class.java)
-                            launcher.launch(intent)
-                        } catch (_: Exception) {
-                            Toast.makeText(context, "Scanner not available", Toast.LENGTH_SHORT).show()
+                    if (!isInPreview) {
+                        // If there already is camera permission, launch. Otherwise request it first.
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                            try {
+                                val intent = Intent(context, BarcodeScannerActivity::class.java)
+                                onStartScanner(intent)
+                            } catch (_: Exception) {
+                                Toast.makeText(context, "Scanner not available", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            onRequestPermission()
                         }
                     }
                 },
                 enabled = !isInPreview,
                 modifier = Modifier
                     .align(Alignment.End)
-                    .padding(16.dp)
+                    .padding(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFE9F7D9),
+                ),
+                border = ButtonDefaults.outlinedButtonBorder()
             ) {
-                Text(text = "Scan Items")
+                Text(text = "Scan Items", color = TextBlack)
             }
 
-            androidx.compose.foundation.lazy.LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                item {
-                    Text(
-                        text = "Scanned Items ${scannedItems.size}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                }
-
-                items(scannedItems) { item ->
-                    val displayName = item.name.ifBlank { item.barcode }
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                text = "$displayName - ${item.calories} kcal, ${item.protein} g protein, ${item.fat} g fat, ${item.carbohydrates} g carbs",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
+            // List of scanned items for the meal
+            val items = itemsByMeal[mealName] ?: emptyList()
+            if (items.isNotEmpty()) {
+                androidx.compose.foundation.lazy.LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp)
+                ) {
+                    items(items) { item ->
+                        ScannedItemRow(
+                            item = item,
+                            mealName = mealName,
+                            viewModel = viewModel,
+                            onDelete = { viewModel.removeItemFromMeal(mealName, item) }
+                        )
                     }
                 }
-
-                item {
-                    androidx.compose.foundation.layout.Spacer(
-                        modifier = Modifier.height(16.dp)
-                    )
-                }
+            } else {
+                // Placeholder text when no items are scanned
+                Text(
+                    text = "No items scanned for $mealName",
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(32.dp),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = TextBlack
+                )
             }
         }
     }
 }
 
-@SuppressLint("ViewModelConstructorInComposable")
-@Preview(showBackground = true)
 @Composable
-fun MainScreenPreview() {
-    NutritionAppTwoTheme {
-        // Preview with an empty MealViewModel
-        val previewViewModel = MealViewModel()
-        MainScreen(onMealClick = { }, viewModel = previewViewModel)
-        //MealDetailScreen(mealName = "Lunch", onBack = { }, viewModel = previewViewModel)
+fun ScannedItemRow(
+    item: ScannedItem,
+    mealName: String,
+    viewModel: MealViewModel,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var showAdjustDialog by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFFFFFFF)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Item name
+            Text(
+                text = item.name,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(2f),
+                color = TextBlack
+            )
+
+            // Nutrient info
+            Column(
+                modifier = Modifier.weight(2f)
+            ) {
+                Text(
+                    text = "Kcal: ${item.calories}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextBlack
+                )
+                Text(
+                    text = "Protein: ${item.protein}g",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextBlack
+                )
+                Text(
+                    text = "Carbs: ${item.carbohydrates}g",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextBlack
+                )
+                Text(
+                    text = "Fat: ${item.fat}g",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextBlack
+                )
+                Text(
+                    text = "Serving: ${item.servingGrams}g",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextBlack
+                )
+            }
+
+            Column(
+                modifier = Modifier.weight(2f)
+            ){
+                Button(
+                    onClick = onDelete,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFFFCDD2)
+                    ),
+                    modifier = Modifier.padding(start = 8.dp).align(Alignment.CenterHorizontally)
+                ) {
+                    Text(
+                        text = "X",
+                        color = Color.Red,
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+                Button(
+                    onClick = { showAdjustDialog = true },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFBBDEFB)
+                    ),
+                    modifier = Modifier.padding(start = 8.dp, top = 4.dp)
+                ) {
+                    Text(
+                        text = "Adjust",
+                        color = Color.Blue,
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
+        }
     }
+
+    if (showAdjustDialog) {
+        AdjustServingDialog(
+            currentGrams = item.servingGrams,
+            onDismiss = { showAdjustDialog = false },
+            onConfirm = { newGrams ->
+                viewModel.updateItemServingSize(mealName, item, newGrams)
+                showAdjustDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+fun AdjustServingDialog(
+    currentGrams: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    var gramsText by remember { mutableStateOf(currentGrams.toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(text = "Adjust Serving Size", color = TextBlack)
+        },
+        text = {
+            Column {
+                Text(
+                    text = "Enter serving size in grams:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextBlack,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                TextField(
+                    value = gramsText,
+                    onValueChange = { gramsText = it },
+                    label = { Text("Grams") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    text = "Nutrients are calculated per 100g and will be adjusted proportionally.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val grams = gramsText.toIntOrNull()
+                    if (grams != null && grams > 0) {
+                        onConfirm(grams)
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF66BB6A)
+                )
+            ) {
+                Text("Confirm", color = TextBlack)
+            }
+        },
+        dismissButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFFFCDD2)
+                )
+            ) {
+                Text("Cancel", color = TextBlack)
+            }
+        }
+    )
 }

@@ -1,8 +1,12 @@
 package com.example.nutritionapptwo
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
@@ -31,7 +35,28 @@ class BarcodeScannerActivity : ComponentActivity() {
 
         scanner = BarcodeScanning.getClient()
 
-        startCamera()
+        // Request camera permission at runtime if needed
+        val permissionLauncher = registerForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { isGranted: Boolean ->
+            if (isGranted) {
+                startCamera()
+            } else {
+                Toast.makeText(
+                    this,
+                    "Camera permission is required to scan barcodes",
+                    Toast.LENGTH_SHORT
+                ).show()
+                setResult(RESULT_CANCELED)
+                finish()
+            }
+        }
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            startCamera()
+        } else {
+            permissionLauncher.launch(Manifest.permission.CAMERA)
+        }
     }
 
     private fun startCamera() {
@@ -39,6 +64,14 @@ class BarcodeScannerActivity : ComponentActivity() {
 
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
+
+            // Check the device has a back camera available
+            if (!cameraProvider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA)) {
+                Toast.makeText(this, "No back camera available", Toast.LENGTH_SHORT).show()
+                setResult(RESULT_CANCELED)
+                finish()
+                return@addListener
+            }
 
             val preview = Preview.Builder().build().also {
                 it.setSurfaceProvider(previewView.surfaceProvider)
@@ -52,13 +85,19 @@ class BarcodeScannerActivity : ComponentActivity() {
                 }
             }
 
-            cameraProvider.unbindAll()
-            cameraProvider.bindToLifecycle(
-                this,
-                CameraSelector.DEFAULT_BACK_CAMERA,
-                preview,
-                analysis
-            )
+            try {
+                cameraProvider.unbindAll()
+                cameraProvider.bindToLifecycle(
+                    this,
+                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    preview,
+                    analysis
+                )
+            } catch (e: Exception) {
+                Toast.makeText(this, "Unable to start camera: ${e.message}", Toast.LENGTH_LONG).show()
+                setResult(RESULT_CANCELED)
+                finish()
+            }
 
         }, ContextCompat.getMainExecutor(this))
     }
@@ -76,8 +115,9 @@ class BarcodeScannerActivity : ComponentActivity() {
             .addOnSuccessListener { barcodes ->
                 for (barcode in barcodes) {
                     barcode.rawValue?.let { value ->
-                        // return scanned value to calling activity
-                        val resultIntent = Intent().putExtra("barcode", value)
+                        // return scanned value and mealName (if provided) to calling activity
+                        val mealName = intent.getStringExtra("mealName")
+                        val resultIntent = Intent().putExtra("barcode", value).putExtra("mealName", mealName)
                         setResult(RESULT_OK, resultIntent)
                         finish()
                     }
