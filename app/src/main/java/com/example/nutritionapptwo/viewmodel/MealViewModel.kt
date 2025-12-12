@@ -14,6 +14,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+// Manager for meals and scanned items, organized by date and meal name.
+// Stores an in-memory map of date and holds observable StateFlows for UI consumption.
+// Adds/removes/updates items and recomputes derived StateFlows accordingly.
+
 class MealViewModel : ViewModel() {
     private val repository: OpenFoodFactsRepository = OpenFoodFactsRepository()
     private val _selectedDate = MutableStateFlow(Date().toLocalDateString())

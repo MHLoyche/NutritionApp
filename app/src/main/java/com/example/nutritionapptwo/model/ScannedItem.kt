@@ -7,7 +7,8 @@ data class ScannedItem(
     val protein: Int = 0,
     val fat: Int = 0,
     val carbohydrates: Int = 0,
-    val servingGrams: Int = 100, // current serving size in grams
+    val servingGrams: Int = 100,
+
     // Store original per-100g values so adjustments always calculate from the base
     val caloriesPer100g: Int = calories,
     val proteinPer100g: Int = protein,

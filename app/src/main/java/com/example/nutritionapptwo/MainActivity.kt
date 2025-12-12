@@ -121,7 +121,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-
 @Composable
 fun MainScreen(
     onMealClick: (String) -> Unit,

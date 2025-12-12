@@ -21,6 +21,8 @@ import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
 
+// Activity to scan barcodes using CameraX and ML Kit
+// Handles requesting camera permission, starting camera preview, and processing barcode scans
 
 class BarcodeScannerActivity : ComponentActivity() {
 

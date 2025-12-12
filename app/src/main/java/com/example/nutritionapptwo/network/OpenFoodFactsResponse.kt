@@ -2,6 +2,9 @@ package com.example.nutritionapptwo.network
 
 import com.google.gson.annotations.SerializedName
 
+// Data classes representing the structure of the OpenFoodFacts API response
+// Turns raw web response into usable objects in the app
+
 data class OpenFoodFactsResponse(
     @SerializedName("status")
     val status: Int = 0,
